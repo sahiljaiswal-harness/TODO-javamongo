@@ -7,6 +7,7 @@ Built using:
 - Built with **Maven** for dependency management
 - UUID-based unique IDs for all tasks
 - MongoDB operations are **thread-safe**, ensuring safe concurrent access
+- Uses MongoDB Atlas as the cloud database, connection string is secured via **environment variable** (MONGODB_URI)
 
 ## Features
 
