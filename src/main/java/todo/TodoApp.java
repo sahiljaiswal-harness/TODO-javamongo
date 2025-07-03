@@ -84,7 +84,7 @@ public class TodoApp {
             for (Document doc : collection.find(Filters.eq("deleted", false))) {
                 items.add(gson.fromJson(doc.toJson(), TodoItem.class));
             }
-            sendJson(exchange, items);
+            sendJson(exchange, items, 200);
         }
 
         private void handleCreate(HttpExchange exchange) throws IOException {
@@ -112,7 +112,7 @@ public class TodoApp {
             }
 
             TodoItem item = gson.fromJson(doc.toJson(), TodoItem.class);
-            sendJson(exchange, item);
+            sendJson(exchange, item, 200);
         }
 
         private void handleUpdate(HttpExchange exchange, UUID id) throws IOException {
@@ -155,10 +155,6 @@ public class TodoApp {
 
             collection.replaceOne(Filters.eq("id", id.toString()), updatedDoc);
             sendResponse(exchange, 204, "");
-        }
-
-        private void sendJson(HttpExchange exchange, Object obj) throws IOException {
-            sendJson(exchange, obj, 200);
         }
 
         private void sendJson(HttpExchange exchange, Object obj, int status) throws IOException {
