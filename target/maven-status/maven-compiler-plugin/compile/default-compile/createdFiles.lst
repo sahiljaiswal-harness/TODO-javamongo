@@ -1,4 +1,5 @@
 todo/TodoApp.class
 todo/TodoApp$TodoHandler.class
+todo/RedisClient.class
 todo/MongoConnection.class
 todo/TodoApp$TodoItem.class

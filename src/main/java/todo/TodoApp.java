@@ -3,9 +3,7 @@ package todo;
 import com.google.gson.*;
 import com.mongodb.client.*;
 import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.Updates;
 import org.bson.Document;
-import org.bson.conversions.Bson;
 
 import com.sun.net.httpserver.*;
 
@@ -80,10 +78,22 @@ public class TodoApp {
         }
 
         private void handleList(HttpExchange exchange) throws IOException {
+
+            String cacheKey = "todos:list";
+            String cached = RedisClient.get(cacheKey);
+
+            if (cached != null) {
+                System.out.println("Serving from Redis cache");
+                sendJson(exchange, gson.fromJson(cached, List.class), 200);
+                return;
+            }
             List<TodoItem> items = new ArrayList<>();
             for (Document doc : collection.find(Filters.eq("deleted", false))) {
                 items.add(gson.fromJson(doc.toJson(), TodoItem.class));
             }
+            
+            String json = gson.toJson(items);
+            RedisClient.set(cacheKey, json);
             sendJson(exchange, items, 200);
         }
 
@@ -98,10 +108,18 @@ public class TodoApp {
             Document doc = Document.parse(gson.toJson(item));
             collection.insertOne(doc);
 
+            RedisClient.delete("todos:list");
             sendJson(exchange, item, 201);
         }
 
         private void handleGet(HttpExchange exchange, UUID id) throws IOException {
+            String cacheKey = "todo:" + id.toString();
+            String cached = RedisClient.get(cacheKey);
+
+            if (cached != null) {
+                sendResponse(exchange, 200, cached);
+                return;
+            }
             Document doc = collection.find(Filters.and(
                     Filters.eq("id", id.toString()),
                     Filters.eq("deleted", false))).first();
@@ -112,6 +130,10 @@ public class TodoApp {
             }
 
             TodoItem item = gson.fromJson(doc.toJson(), TodoItem.class);
+
+            String json = gson.toJson(item);
+            RedisClient.set(cacheKey, json);
+
             sendJson(exchange, item, 200);
         }
 
@@ -135,6 +157,8 @@ public class TodoApp {
             Document updatedDoc = Document.parse(gson.toJson(existing));
             collection.replaceOne(Filters.eq("id", id.toString()), updatedDoc);
 
+            RedisClient.delete("todo:" + id.toString());
+            RedisClient.delete("todos:list");
             sendResponse(exchange, 200, gson.toJson(existing));
         }
 
@@ -154,6 +178,9 @@ public class TodoApp {
             Document updatedDoc = Document.parse(updatedJson);
 
             collection.replaceOne(Filters.eq("id", id.toString()), updatedDoc);
+
+            RedisClient.delete("todo:" + id.toString());
+            RedisClient.delete("todos:list");
             sendResponse(exchange, 204, "");
         }
 
