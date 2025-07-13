@@ -1,3 +1,5 @@
 /Users/sahiljaiswal/Documents/java/todo-javamongo/src/main/java/todo/MongoConnection.java
 /Users/sahiljaiswal/Documents/java/todo-javamongo/src/main/java/todo/RedisClient.java
 /Users/sahiljaiswal/Documents/java/todo-javamongo/src/main/java/todo/TodoApp.java
+/Users/sahiljaiswal/Documents/java/todo-javamongo/src/main/java/todo/TodoItem.java
+/Users/sahiljaiswal/Documents/java/todo-javamongo/src/main/java/todo/TodoRepository.java

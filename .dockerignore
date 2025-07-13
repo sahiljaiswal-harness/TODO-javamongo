@@ -1,0 +1,26 @@
+# Ignore Maven build output
+/target
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE/project files
+.idea/
+*.iml
+*.log
+*.swp
+
+# Ignore version control
+.git
+.gitignore
+
+# Ignore node/npm (if present)
+node_modules
+npm-debug.log
+
+# Ignore test data and local config
+*.local
+*.env
+*.bak
+data.json

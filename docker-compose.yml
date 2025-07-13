@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7
+    container_name: my-redis
+    ports:
+      - "6379:6379"
+
+  todo-app:
+    image: todo-javamongo
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=mongodb+srv://sahiljaiswal:TpipRHPeloUMENBP@todocluster0.fywpqxx.mongodb.net/
+      - REDIS_HOST=redis
+    depends_on:
+      - redis

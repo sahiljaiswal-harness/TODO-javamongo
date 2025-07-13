@@ -2,7 +2,6 @@ package todo;
 
 import com.google.gson.*;
 import com.mongodb.client.*;
-import com.mongodb.client.model.Filters;
 import org.bson.Document;
 
 import com.sun.net.httpserver.*;
@@ -15,15 +14,6 @@ import java.util.*;
 
 public class TodoApp {
 
-    static class TodoItem {
-        UUID id;
-        String title;
-        String description;
-        boolean completed;
-        boolean deleted;
-        Instant createdAt;
-        Instant updatedAt;
-    }
 
     public static void main(String[] args) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -34,19 +24,24 @@ public class TodoApp {
     }
 
     static class TodoHandler implements HttpHandler {
-        private final MongoCollection<Document> collection;
+        private final TodoRepository repository;
         private final Gson gson;
 
         public TodoHandler() {
-            collection = MongoConnection.connect().getCollection("todo");
-
+            MongoCollection<Document> collection = MongoConnection.connect().getCollection("todo");
             GsonBuilder builder = new GsonBuilder();
+
+            // Register custom serializers and deserializers for Instant
             builder.registerTypeAdapter(Instant.class,
                     (JsonDeserializer<Instant>) (json, typeOfT, context) -> Instant
                             .parse(json.getAsJsonPrimitive().getAsString()));
+
             builder.registerTypeAdapter(Instant.class,
                     (JsonSerializer<Instant>) (src, typeOfSrc, context) -> new JsonPrimitive(src.toString()));
+            
+        
             gson = builder.create();
+            repository = new TodoRepository(collection, gson);
         }
 
         @Override
@@ -65,127 +60,146 @@ public class TodoApp {
                     switch (method) {
                         case "GET" -> handleGet(exchange, id);
                         case "PUT" -> handleUpdate(exchange, id);
+                        case "PATCH" -> handleUpdate(exchange, id);
                         case "DELETE" -> handleDelete(exchange, id);
-                        default -> sendResponse(exchange, 405, "Method Not Allowed");
+                        default -> sendError(exchange, 405, "Method Not Allowed");
                     }
                 } else {
-                    sendResponse(exchange, 404, "Not Found");
+                    sendError(exchange, 404, "Not Found");
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                sendResponse(exchange, 500, "Internal Server Error");
+                sendError(exchange, 500, "Internal Server Error");
             }
         }
 
         private void handleList(HttpExchange exchange) throws IOException {
-
-            String cacheKey = "todos:list";
-            String cached = RedisClient.get(cacheKey);
-
-            if (cached != null) {
-                System.out.println("Serving from Redis cache");
-                sendJson(exchange, gson.fromJson(cached, List.class), 200);
-                return;
-            }
-            List<TodoItem> items = new ArrayList<>();
-            for (Document doc : collection.find(Filters.eq("deleted", false))) {
-                items.add(gson.fromJson(doc.toJson(), TodoItem.class));
+            // Parse query params
+            String query = exchange.getRequestURI().getQuery();
+            Boolean completed = null;
+            String search = null;
+            if (query != null) {
+                for (String param : query.split("&")) {
+                    String[] pair = param.split("=");
+                    if (pair.length == 2) {
+                        if (pair[0].equals("completed")) {
+                            String val = pair[1].toLowerCase();
+                            if (val.equals("true") || val.equals("false")) {
+                                completed = Boolean.parseBoolean(val);
+                            } else {
+                                sendError(exchange, 400, "Invalid value for 'completed'. Use true or false.");
+                                return;
+                            }
+                        } else if (pair[0].equals("search")) {
+                            search = pair[1];
+                        } else {
+                            sendError(exchange, 400, "Unknown query parameter: '" + pair[0] + "'.");
+                            return;
+                        }
+                    } else {
+                        sendError(exchange, 400, "Malformed query parameter: '" + param + "'.");
+                        return;
+                    }
+                }
             }
             
-            String json = gson.toJson(items);
-            RedisClient.set(cacheKey, json);
-            sendJson(exchange, items, 200);
+            String cacheKey = "todos:list" + (completed != null ? ":completed=" + completed : "") + (search != null ? ":search=" + search : "");
+            String cached = RedisClient.get(cacheKey);
+            if (cached != null) {
+                System.out.println("Serving from Redis cache");
+                sendJson(exchange, gson.fromJson(cached, List.class), 200, true);
+                return;
+            }
+            // Always retrieve from DB and cache the full result (before search filtering)
+            List<TodoItem> dbItems = repository.listTodosWithQuery(completed);
+            String dbJson = gson.toJson(dbItems);
+            RedisClient.setex(cacheKey, 60, dbJson); // cache list for 60 seconds
+            // Now filter in-memory for search
+            List<TodoItem> items = dbItems;
+            if (search != null) {
+                String searchLower = search.toLowerCase();
+                items = new ArrayList<>();
+                for (TodoItem item : dbItems) {
+                    if ((item.title != null && item.title.toLowerCase().contains(searchLower)) ||
+                        (item.description != null && item.description.toLowerCase().contains(searchLower))) {
+                        items.add(item);
+                    }
+                }
+            }
+
+            RedisClient.setex(cacheKey, 60, gson.toJson(items)); 
+            // Update cache for each item by id
+            for (TodoItem item : dbItems) {
+                String itemKey = "todo:" + item.id;
+                RedisClient.setex(itemKey, 60, gson.toJson(item)); // cache item for 60 seconds
+            }
+            sendJson(exchange, items, 200, false);
         }
 
         private void handleCreate(HttpExchange exchange) throws IOException {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             TodoItem item = gson.fromJson(body, TodoItem.class);
-            item.id = UUID.randomUUID();
-            item.createdAt = Instant.now();
-            item.updatedAt = item.createdAt;
-            item.deleted = false;
-
-            Document doc = Document.parse(gson.toJson(item));
-            collection.insertOne(doc);
-
+            item = repository.createTodo(item);
             RedisClient.delete("todos:list");
-            sendJson(exchange, item, 201);
+            sendJson(exchange, item, 201, false);
         }
 
         private void handleGet(HttpExchange exchange, UUID id) throws IOException {
             String cacheKey = "todo:" + id.toString();
             String cached = RedisClient.get(cacheKey);
-
             if (cached != null) {
-                sendResponse(exchange, 200, cached);
+                sendJson(exchange, gson.fromJson(cached, TodoItem.class), 200, true);
                 return;
             }
-            Document doc = collection.find(Filters.and(
-                    Filters.eq("id", id.toString()),
-                    Filters.eq("deleted", false))).first();
-
-            if (doc == null) {
-                sendResponse(exchange, 404, "Not Found");
+            TodoItem item = repository.getTodoById(id);
+            if (item == null) {
+                sendError(exchange, 404, "Not Found");
                 return;
             }
-
-            TodoItem item = gson.fromJson(doc.toJson(), TodoItem.class);
-
             String json = gson.toJson(item);
-            RedisClient.set(cacheKey, json);
-
-            sendJson(exchange, item, 200);
+            RedisClient.setex(cacheKey, 60, json); // cache item for 60 seconds
+            sendJson(exchange, item, 200, false);
         }
 
         private void handleUpdate(HttpExchange exchange, UUID id) throws IOException {
-            Document doc = collection.find(Filters.eq("id", id.toString())).first();
-            if (doc == null || doc.getBoolean("deleted", false)) {
-                sendResponse(exchange, 404, "Not Found");
-                return;
-            }
-
-            TodoItem existing = gson.fromJson(doc.toJson(), TodoItem.class);
-
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             TodoItem update = gson.fromJson(body, TodoItem.class);
-
-            existing.title = update.title != null ? update.title : existing.title;
-            existing.description = update.description != null ? update.description : existing.description;
-            existing.completed = update.completed;
-            existing.updatedAt = Instant.now();
-
-            Document updatedDoc = Document.parse(gson.toJson(existing));
-            collection.replaceOne(Filters.eq("id", id.toString()), updatedDoc);
-
+            TodoItem updated = repository.updateTodo(id, update);
+            if (updated == null) {
+                sendError(exchange, 404, "Not Found");
+                return;
+            }
             RedisClient.delete("todo:" + id.toString());
             RedisClient.delete("todos:list");
-            sendResponse(exchange, 200, gson.toJson(existing));
+            sendJson(exchange, updated, 200, false);
         }
 
         private void handleDelete(HttpExchange exchange, UUID id) throws IOException {
-            Document doc = collection.find(Filters.eq("id", id.toString())).first();
-            if (doc == null || doc.getBoolean("deleted", false)) {
-                sendResponse(exchange, 404, "Not Found");
+            boolean deleted = repository.softDeleteTodo(id);
+            if (!deleted) {
+                sendError(exchange, 404, "Not Found");
                 return;
             }
-
-            TodoItem todo = gson.fromJson(doc.toJson(), TodoItem.class);
-
-            todo.deleted = true;
-            todo.updatedAt = Instant.now();
-
-            String updatedJson = gson.toJson(todo);
-            Document updatedDoc = Document.parse(updatedJson);
-
-            collection.replaceOne(Filters.eq("id", id.toString()), updatedDoc);
-
             RedisClient.delete("todo:" + id.toString());
             RedisClient.delete("todos:list");
-            sendResponse(exchange, 204, "");
+            sendJson(exchange, null, 204, false);
         }
 
-        private void sendJson(HttpExchange exchange, Object obj, int status) throws IOException {
+        private void sendJson(HttpExchange exchange, Object obj, int status, boolean isCache) throws IOException {
             String json = gson.toJson(obj);
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            if (isCache) {
+                exchange.getResponseHeaders().add("X-Cache", "HIT");
+            }
+            exchange.sendResponseHeaders(status, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
+        }
+
+        private void sendError(HttpExchange exchange, int status, String msg) throws IOException {
+            String json = gson.toJson(Collections.singletonMap("error", msg));
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length);
@@ -194,12 +208,5 @@ public class TodoApp {
             }
         }
 
-        private void sendResponse(HttpExchange exchange, int status, String msg) throws IOException {
-            byte[] bytes = msg.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, bytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(bytes);
-            }
-        }
     }
 }

@@ -5,11 +5,16 @@ public class RedisClient {
     private static Jedis jedis;
 
     static {
-        jedis = new Jedis("localhost", 6379); 
+        String redisHost = System.getenv().getOrDefault("REDIS_HOST", "localhost");
+        jedis = new Jedis(redisHost, 6379);
     }
 
     public static void set(String key, String value) {
         jedis.set(key, value);
+    }
+
+    public static void setex(String key, int seconds, String value) {
+        jedis.setex(key, seconds, value);
     }
 
     public static String get(String key) {

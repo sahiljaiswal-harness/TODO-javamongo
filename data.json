@@ -1,0 +1,48 @@
+[
+    {
+      "id": "b3456fe2-dbcf-42c3-a9c2-49fc6a74891f",
+      "title": "Finish Docker Setup",
+      "description": "Write Dockerfile and docker-compose.yml for Java TODO app",
+      "completed": false,
+      "deleted": false,
+      "createdAt": "2025-07-01T10:30:00Z",
+      "updatedAt": "2025-07-01T10:30:00Z"
+    },
+    {
+      "id": "a12d7f1a-9f0e-47cf-82c7-9cbd2c64c2a1",
+      "title": "Read Clean Code",
+      "description": "Complete chapters 3 to 5 of Clean Code book",
+      "completed": false,
+      "deleted": false,
+      "createdAt": "2025-07-03T09:00:00Z",
+      "updatedAt": "2025-07-03T09:00:00Z"
+    },
+    {
+      "id": "c1d32288-d11e-4e7c-8321-8d5a03b912ee",
+      "title": "Submit Expense Report",
+      "description": "Log travel expenses in Expensify for reimbursement",
+      "completed": true,
+      "deleted": false,
+      "createdAt": "2025-06-30T16:45:00Z",
+      "updatedAt": "2025-07-01T08:10:00Z"
+    },
+    {
+      "id": "7bb3fce6-e41a-4f83-b7d5-5a059a13784f",
+      "title": "Refactor Mongo Handler",
+      "description": "Extract DB operations into a separate class for cleaner code",
+      "completed": false,
+      "deleted": false,
+      "createdAt": "2025-07-04T13:20:00Z",
+      "updatedAt": "2025-07-04T13:20:00Z"
+    },
+    {
+      "id": "2381a77d-ea2d-4be1-96c1-60f6c3aa1a8a",
+      "title": "Plan Weekend Trip",
+      "description": "Research and plan itinerary for short weekend getaway",
+      "completed": false,
+      "deleted": false,
+      "createdAt": "2025-07-05T18:00:00Z",
+      "updatedAt": "2025-07-05T18:00:00Z"
+    }
+  ]
+  
