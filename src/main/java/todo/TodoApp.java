@@ -182,7 +182,8 @@ public class TodoApp {
             }
             RedisClient.delete("todo:" + id.toString());
             RedisClient.deleteByPattern("todos:list*");
-            sendJson(exchange, null, 204, false);
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
         }
 
         private void sendJson(HttpExchange exchange, Object obj, int status, boolean isCache) throws IOException {

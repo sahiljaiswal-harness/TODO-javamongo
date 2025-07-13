@@ -1,10 +1,8 @@
-# TODO Java REST API with MongoDB
+# TODO Java Mongo App
 
-A Java-based TODO REST API that supports **CRUD** operations using **MongoDB** as a persistent backend.
+A professional, production-ready TODO REST API built with Java 17, MongoDB, Redis, and Docker. Implements best practices for caching, error handling, and deployment.
 
-Built using:
-- Uses **pure Java**
-- Built with **Maven** for dependency management
+---
 - UUID-based unique IDs for all tasks
 - MongoDB operations are **thread-safe**, ensuring safe concurrent access
 - Uses MongoDB Atlas as the cloud database, connection string is secured via **environment variable** (MONGODB_URI)
@@ -34,27 +32,26 @@ Built using:
   - `search=keyword` — filter by keyword in title or description
   - Both can be combined: `/todos?completed=true&search=work`
 
-## Common Problems and How We Solved Them
+---
 
-### 1. Docker image not runnable / No main manifest attribute
-**Problem:** The built JAR did not specify the main class, so `java -jar app.jar` failed.
-**Solution:** Added `maven-jar-plugin` configuration in `pom.xml` to set the `Main-Class` manifest attribute.
+## Project Notes & Design Decisions
 
-### 2. JAR missing dependencies (NoClassDefFoundError)
-**Problem:** The app JAR did not include dependencies like Gson, causing runtime errors.
-**Solution:** Added `maven-assembly-plugin` to build a "fat JAR" containing all dependencies.
+- **MongoDB Indexes:**
+  - Uses indexes for efficient queries (recommended: create indexes on `completed`, `deleted`, and text index on `title` for search).
+- **Redis & Jedis:**
+  - Uses Redis for caching lists and items, with TTL and pattern-based invalidation. Jedis is used as the Java Redis client.
+- **Build Tools:**
+  - Maven for Java builds. Bazel/Gravel not used but considered for future extensibility and reproducible builds.
+- **Error Handling:**
+  - All errors are returned as JSON `{ "error": "..." }` with appropriate HTTP codes. Application never crashes on bad input—errors are always returned gracefully.
+- **PUT vs PATCH:**
+  - `PUT` replaces the entire resource. `PATCH` supports partial updates (only provided fields are changed).
+- **Repository Pattern:**
+  - All database queries are segregated into a dedicated repository class for maintainability and separation of concerns.
+- **Robustness:**
+  - Defensive code ensures that exceptions are caught, logged, and returned as error responses instead of killing the application.
 
-### 3. Redis connection errors inside Docker
-**Problem:** The app could not connect to Redis when running in Docker, even with `REDIS_HOST=host.docker.internal` or `127.0.0.1`.
-**Solution:**
-- Updated the Java code to read the Redis host from the `REDIS_HOST` environment variable.
-- Switched to using Docker Compose to run both Redis and the app as services on the same network. Set `REDIS_HOST=redis` in the app service.
-
-### 4. Container name conflicts
-**Problem:** Running `docker run` with the same container name (`--name todo-app`) caused conflicts if the container already existed.
-**Solution:** Use `docker rm todo-app` or the provided `docker-cleanup.sh` script to remove old containers before starting new ones.
-
-### 5. General Docker workflow
+---
 **Solution:**
 - Use `docker-compose.yml` to simplify starting all services.
 - Use the provided `docker-cleanup.sh` script to remove exited containers and dangling images.
