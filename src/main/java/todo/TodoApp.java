@@ -140,7 +140,7 @@ public class TodoApp {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             TodoItem item = gson.fromJson(body, TodoItem.class);
             item = repository.createTodo(item);
-            RedisClient.delete("todos:list");
+            RedisClient.deleteByPattern("todos:list*");
             sendJson(exchange, item, 201, false);
         }
 
@@ -170,7 +170,7 @@ public class TodoApp {
                 return;
             }
             RedisClient.delete("todo:" + id.toString());
-            RedisClient.delete("todos:list");
+            RedisClient.deleteByPattern("todos:list*");
             sendJson(exchange, updated, 200, false);
         }
 
@@ -181,7 +181,7 @@ public class TodoApp {
                 return;
             }
             RedisClient.delete("todo:" + id.toString());
-            RedisClient.delete("todos:list");
+            RedisClient.deleteByPattern("todos:list*");
             sendJson(exchange, null, 204, false);
         }
 

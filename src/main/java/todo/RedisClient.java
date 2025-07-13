@@ -24,5 +24,11 @@ public class RedisClient {
     public static void delete(String key) {
         jedis.del(key);
     }
+
+    public static void deleteByPattern(String pattern) {
+        for (String key : jedis.keys(pattern)) {
+            jedis.del(key);
+        }
+    }
 }
 
