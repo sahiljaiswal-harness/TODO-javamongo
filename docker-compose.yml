@@ -13,7 +13,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MONGO_URI=mongodb+srv://sahiljaiswal:TpipRHPeloUMENBP@todocluster0.fywpqxx.mongodb.net/
+      - MONGO_URI=""
       - REDIS_HOST=redis
     depends_on:
       - redis
